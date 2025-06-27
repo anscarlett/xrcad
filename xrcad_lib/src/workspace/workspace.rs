@@ -3,6 +3,7 @@
 
 //! Module: workspace
 
+     
 
 use bevy::ecs::resource::Resource;
 use bevy::ecs::system::Res;
@@ -12,7 +13,7 @@ use super::helpers::coordinate_system::CoordinateSystem;
 use super::helpers::grid::Grid;
 use super::helpers::marker::Marker;
 use super::helpers::origin::Origin;
-use super::helpers::plane::Plane;
+use crate::model::brep::topology::plane::Plane;
 
 
 #[derive(Debug, Clone)]
@@ -72,6 +73,16 @@ impl Workspace {
                 HelperKind::Axes(axes) => axes.render(&mut gizmos),
                 HelperKind::Plane(plane) => plane.render(&mut gizmos),
                 _ => {}
+            }
+        }
+    }
+    /// Set the render mode of a helper plane by id
+    pub fn set_plane_render_mode(&mut self, id: &str, mode: crate::model::brep::topology::plane::PlaneRenderMode) {
+        for helper in &mut self.helpers {
+            if helper.id == id {
+                if let HelperKind::Plane(plane) = &mut helper.kind {
+                    plane.set_render_mode(mode);
+                }
             }
         }
     }

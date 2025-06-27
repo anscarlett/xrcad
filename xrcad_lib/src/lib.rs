@@ -36,6 +36,7 @@ pub mod model {
             pub mod edge;
             pub mod edge_loop;
             pub mod face;
+            pub mod plane;
         }
         pub mod geometry {
             pub mod circle;
@@ -94,6 +95,7 @@ pub mod render{
 
 pub mod viewport{
     pub mod camera;
+    pub mod camera_control;
     // pub mod frustum;
     // pub mod projection;
     // pub mod view;
@@ -106,7 +108,6 @@ pub mod workspace {
         pub mod grid;
         pub mod marker;
         pub mod origin;
-        pub mod plane;
     }
     pub mod workspace;
 }

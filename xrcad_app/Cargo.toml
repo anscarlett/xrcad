@@ -7,3 +7,4 @@ edition = "2024"
 bevy = { workspace = true }
 nalgebra = { workspace = true }
 xrcad_lib = { path = "../xrcad_lib" }
+bevy_egui = { workspace = true }
