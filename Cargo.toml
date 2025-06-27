@@ -1,0 +1,10 @@
+[workspace]
+members = [
+    "xrcad_lib",
+    "xrcad_app"
+]
+
+[workspace.dependencies]
+nalgebra = "0.32"
+bevy = { git = "https://github.com/bevyengine/bevy", branch = "main", features = ["wayland"] }
+
