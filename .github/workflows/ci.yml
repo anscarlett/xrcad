@@ -6,17 +6,24 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
+        target:
+          - x86_64-unknown-linux-gnu
+          - x86_64-pc-windows-gnu
+      exclude:
+        - os: windows-latest
+          target: x86_64-unknown-linux-gnu
+        - os: ubuntu-latest
+          target: x86_64-pc-windows-gnu
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          target: |
-            x86_64-unknown-linux-gnu
-            x86_64-pc-windows-gnu
+          target: ${{ matrix.target }}
       - name: Build Native
-        run: cargo build --release
+        run: cargo build --release --target ${{ matrix.target }}
+
 
   android:
     runs-on: ubuntu-latest
