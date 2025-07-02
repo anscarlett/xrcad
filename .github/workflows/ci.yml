@@ -24,17 +24,19 @@ jobs:
       - name: Build Native
         run: cargo build --release --target ${{ matrix.target }}
 
-
   android:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Android
+      - name: Set up Android Emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30
           target: default
           arch: x86_64
+          script: |
+            echo "Emulator is up"
+            adb devices
       - name: Install cargo-ndk
         run: cargo install cargo-ndk
       - name: Build for Android
