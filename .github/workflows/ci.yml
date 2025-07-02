@@ -1,4 +1,3 @@
-
 name: Build Bevy App
 on: [push, pull_request]
 jobs:
@@ -37,8 +36,19 @@ jobs:
           script: |
             echo "Emulator is up"
             adb devices
+      - name: Wait for Android emulator to boot
+        run: |
+          adb wait-for-device
+          boot_completed=""
+          until [[ "$boot_completed" == "1" ]]; do
+            boot_completed=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+            echo "Waiting for emulator to start..."
+            sleep 5
+          done
+          echo "Emulator booted"
+      - name: Add Rust Android target
+        run: rustup target add aarch64-linux-android
       - name: Install cargo-ndk
         run: cargo install cargo-ndk
       - name: Build for Android
         run: cargo ndk -t arm64-v8a -o ./apk build --release
-
