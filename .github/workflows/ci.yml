@@ -22,7 +22,7 @@ jobs:
           target: ${{ matrix.target }}
       - name: Install ALSA dev libraries
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev pkg-config
       - name: Build Native
         run: cargo build --release --target ${{ matrix.target }}
 
