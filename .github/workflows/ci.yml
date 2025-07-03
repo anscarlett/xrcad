@@ -25,6 +25,12 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev pkg-config
       - name: Build Native
         run: cargo build --release --target ${{ matrix.target }}
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xrcad-${{ matrix.target }}
+          path: |
+            target/${{ matrix.target }}/release/xrcad*
 
   android:
     runs-on: ubuntu-latest
