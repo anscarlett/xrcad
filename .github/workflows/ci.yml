@@ -20,9 +20,9 @@ jobs:
         with:
           toolchain: stable
           target: ${{ matrix.target }}
-      - name: Install ALSA dev libraries
+      - name: Install ALSA and Wayland dev libraries
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev pkg-config
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev pkg-config libwayland-dev libxkbcommon-dev
       - name: Build Native
         run: cargo build --release --target ${{ matrix.target }}
       - name: Upload binary artifact
