@@ -54,10 +54,11 @@ jobs:
   
       - name: Build APK with cargo-apk
         run: cargo apk build --release
+        working-directory: xrcad_app
   
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
           # Adjust this path if your Cargo.toml specifies a different package name
-          path: target/android-artifacts/**/*.apk
+          path: xrcadd_app/target/android-artifacts/**/*.apk
