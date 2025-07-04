@@ -9,5 +9,5 @@ resolver = "3"
 [workspace.dependencies]
 nalgebra = "0.32"
 bevy = { git = "https://github.com/bevyengine/bevy", branch = "main", features = ["wayland"] }
-bevy_egui = "*"
+xrcad_lib = { path = "xrcad_lib" }
 
