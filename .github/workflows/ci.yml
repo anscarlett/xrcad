@@ -129,8 +129,7 @@ jobs:
           export AR_armv7_linux_androideabi=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
           export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang
           export CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi30-clang
-          cd xrcad_app
-          cargo xbuild --release --target ${{ matrix.target }}
+          cargo xbuild --release --target ${{ matrix.target }} -p xrcad_app
       
       - name: Upload Android artifact
         uses: actions/upload-artifact@v4
