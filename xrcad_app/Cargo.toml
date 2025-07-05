@@ -7,13 +7,3 @@ edition = "2024"
 bevy = { workspace = true }
 nalgebra = { workspace = true }
 xrcad_lib = { workspace = true }
-
-[package.metadata.android]
-manifest-path = "AndroidManifest.xml"    # or "android/AndroidManifest.xml" if that's where you put it
-package = "com.example.xrcad"
-build-target = "aarch64-linux-android"
-min-sdk-version = 21
-target-sdk-version = 33
-# icon = "res/mipmap/ic_launcher.png"
-# assets = ["assets"]
-# res = ["res"]
