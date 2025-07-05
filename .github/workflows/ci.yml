@@ -74,8 +74,9 @@ jobs:
 
       - name: Ensure Cargo.lock exists in xrcad_app
         run: |
-          cd xrcad_app
-          [ -f Cargo.lock ] || cargo generate-lockfile
+          if [ ! -f xrcad_app/Cargo.lock ]; then
+            cp Cargo.lock xrcad_app/Cargo.lock
+          fi
 
       - name: Setup Rust toolchain
         uses: actions-rs/toolchain@v1
