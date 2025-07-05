@@ -72,11 +72,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Ensure Cargo.lock exists in xrcad_app
-        run: |
-          if [ ! -f xrcad_app/Cargo.lock ]; then
-            cp Cargo.lock xrcad_app/Cargo.lock
-          fi
+  #    - name: Ensure Cargo.lock exists in xrcad_app
+  #      run: |
+  #        if [ ! -f xrcad_app/Cargo.lock ]; then
+  #          cp Cargo.lock xrcad_app/Cargo.lock
+  #        fi
 
       - name: Setup Rust toolchain
         uses: actions-rs/toolchain@v1
@@ -124,6 +124,7 @@ jobs:
       
       - name: Build Android with cargo-xbuild
         run: |
+          cd $GITHUB_WORKSPACE
           export CC_aarch64_linux_android=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang
           export AR_aarch64_linux_android=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
           export CC_armv7_linux_androideabi=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi30-clang
