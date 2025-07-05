@@ -1,36 +1,169 @@
-name: Build Bevy App
+name: Cross-Platform Build
 on: [push, pull_request]
+
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
+  # Linux build with comprehensive Wayland support
   build-linux:
+    name: Build Linux (Wayland)
     runs-on: ubuntu-latest
+    
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           target: x86_64-unknown-linux-gnu
-      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev pkg-config libwayland-dev libxkbcommon-dev
-      - run: cargo build --release --target x86_64-unknown-linux-gnu
-      - uses: actions/upload-artifact@v4
+          override: true
+      
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev \
+            libudev-dev \
+            pkg-config \
+            libwayland-dev \
+            libxkbcommon-dev \
+            libwayland-cursor-dev \
+            libwayland-egl-dev \
+            libxkbcommon-x11-dev \
+            libxrandr-dev \
+            libxi-dev \
+            libx11-dev \
+            libxext-dev \
+            libxss-dev
+      
+      - name: Cache cargo dependencies
+        uses: actions/cache@v4
         with:
-          name: xrcad-linux
-          path: target/x86_64-unknown-linux-gnu/release/xrcad_app # or your binary name
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Build Linux release
+        run: cargo build --release --target x86_64-unknown-linux-gnu
+      
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xrcad-linux-x86_64
+          path: target/x86_64-unknown-linux-gnu/release/xrcad_app
 
+  # Android build with cargo-xbuild (replacing deprecated cargo-apk)
   build-android:
+    name: Build Android (cargo-xbuild)
     runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        include:
+          - target: aarch64-linux-android
+            arch: arm64-v8a
+          - target: armv7-linux-androideabi
+            arch: armeabi-v7a
+    
     steps:
-      - uses: actions/checkout@v4
-      - run: rustup target add aarch64-linux-android
-      - run: cargo install cargo-apk cargo-ndk
-      - uses: actions/setup-java@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+          override: true
+      
+      - name: Install cargo-xbuild
+        run: cargo install cargo-xbuild
+      
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-      - uses: android-actions/setup-android@v3
-      - run: sdkmanager "platforms;android-30"
-      - run: cargo apk build --release
-        working-directory: xrcad_app
-      - uses: actions/upload-artifact@v4
+      
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
         with:
-          name: android-apk
-          path: xrcad_app/target/android-artifacts/**/*.apk
+          api-level: 30
+          target: android-30
+      
+      - name: Install Android SDK components
+        run: |
+          sdkmanager "platforms;android-30"
+          sdkmanager "build-tools;30.0.3"
+          sdkmanager "ndk;25.2.9519653"
+      
+      - name: Cache cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/
+          key: ${{ runner.os }}-android-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Set Android environment
+        run: |
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> $GITHUB_ENV
+          echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> $GITHUB_ENV
+      
+      - name: Build Android with cargo-xbuild
+        run: |
+          export CC_aarch64_linux_android=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang
+          export AR_aarch64_linux_android=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+          export CC_armv7_linux_androideabi=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi30-clang
+          export AR_armv7_linux_androideabi=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+          cd xrcad_app
+          cargo xbuild --release --target ${{ matrix.target }}
+      
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xrcad-android-${{ matrix.arch }}
+          path: xrcad_app/target/${{ matrix.target }}/release/xrcad_app
+
+  # Template for future platform builds
+  # Uncomment and modify as needed for additional platforms
+  # build-platform-template:
+  #   name: Build [Platform Name]
+  #   runs-on: [platform-runner]
+  #   strategy:
+  #     matrix:
+  #       target: [target1, target2]
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #     - name: Setup Rust toolchain
+  #       uses: actions-rs/toolchain@v1
+  #       with:
+  #         toolchain: stable
+  #         target: ${{ matrix.target }}
+  #         override: true
+  #     - name: Install platform dependencies
+  #       run: |
+  #         # Platform-specific dependency installation
+  #     - name: Cache cargo dependencies
+  #       uses: actions/cache@v4
+  #       with:
+  #         path: |
+  #           ~/.cargo/registry
+  #           ~/.cargo/git
+  #           target/
+  #         key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+  #     - name: Build platform release
+  #       run: cargo build --release --target ${{ matrix.target }}
+  #     - name: Upload platform artifact
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: xrcad-[platform]-${{ matrix.target }}
+  #         path: target/${{ matrix.target }}/release/xrcad_app

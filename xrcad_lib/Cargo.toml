@@ -5,14 +5,7 @@ edition = "2021"
 
 [lib]
 name = "xrcad_lib"
-# Do NOT set crate-type here globally, let targets override it.
-
-# For Android targets, use cdylib
-[target.'cfg(target_os = "android")'.lib]
-crate-type = ["cdylib"]
-
-# For Linux targets, use rlib (or just omit crate-type, as rlib is the default)
-[target.'cfg(target_os = "linux")'.lib]
+# Default crate type is rlib, which works for most cases
 crate-type = ["rlib"]
 
 [dependencies]
