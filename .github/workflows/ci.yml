@@ -30,8 +30,6 @@ jobs:
             pkg-config \
             libwayland-dev \
             libxkbcommon-dev \
-            libwayland-cursor-dev \
-            libwayland-egl-dev \
             libxkbcommon-x11-dev \
             libxrandr-dev \
             libxi-dev \
