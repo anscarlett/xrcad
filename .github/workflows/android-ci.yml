@@ -100,9 +100,7 @@ jobs:
     
     - name: Build APK
       run: |
-        # Build the APK
-        cargo apk build --release
-        working-directory: xrcad_app
+        cargo apk build --release --manifest-path xrcad_app/Cargo.toml
         
         # Alternative: Build for specific target
         # cargo apk build --release --target aarch64-linux-android
