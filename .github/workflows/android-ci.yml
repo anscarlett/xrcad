@@ -102,6 +102,7 @@ jobs:
       run: |
         # Build the APK
         cargo apk build --release
+        working-directory: xrcad_app
         
         # Alternative: Build for specific target
         # cargo apk build --release --target aarch64-linux-android
