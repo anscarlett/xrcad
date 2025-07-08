@@ -9,7 +9,7 @@ nalgebra = { workspace = true }
 xrcad_lib = { workspace = true }
 
 [package.metadata.android]
-manifest-path = "AndroidManifest.xml"    # or "android/AndroidManifest.xml" if that's where you put it
+manifest-path = "android/AndroidManifest.xml"
 package = "com.example.xrcad"
 build-target = "aarch64-linux-android"
 min-sdk-version = 21
