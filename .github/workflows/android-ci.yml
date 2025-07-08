@@ -1,0 +1,153 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [published]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Java JDK
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+    
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+      with:
+        api-level: 33
+        build-tools: 33.0.2
+        ndk-version: 25.2.9519653
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: |
+          aarch64-linux-android
+          armv7-linux-androideabi
+          i686-linux-android
+          x86_64-linux-android
+    
+    - name: Cache Rust dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Install cargo-apk
+      run: cargo install cargo-apk
+    
+    - name: Verify Android assets exist
+      run: |
+        if [ ! -f "android/AndroidManifest.xml" ]; then
+          echo "Error: android/AndroidManifest.xml not found!"
+          echo "Please create the Android manifest in your repository."
+          exit 1
+        fi
+        
+        if [ ! -d "android/res" ]; then
+          echo "Warning: android/res directory not found. Creating basic structure..."
+          mkdir -p android/res/values
+        fi
+    
+    - name: Setup environment variables
+      run: |
+        echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "ANDROID_NDK_ROOT=$ANDROID_NDK_ROOT" >> $GITHUB_ENV
+        echo "NDK_HOME=$ANDROID_NDK_ROOT" >> $GITHUB_ENV
+        
+        # Add Android tools to PATH
+        echo "$ANDROID_HOME/tools" >> $GITHUB_PATH
+        echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
+        echo "$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+    
+    - name: Configure Rust for Android
+      run: |
+        # Set up cross-compilation environment
+        echo "[target.aarch64-linux-android]" >> ~/.cargo/config.toml
+        echo "ar = \"$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar\"" >> ~/.cargo/config.toml
+        echo "linker = \"$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android33-clang\"" >> ~/.cargo/config.toml
+        echo "" >> ~/.cargo/config.toml
+        
+        echo "[target.armv7-linux-androideabi]" >> ~/.cargo/config.toml
+        echo "ar = \"$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar\"" >> ~/.cargo/config.toml
+        echo "linker = \"$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi33-clang\"" >> ~/.cargo/config.toml
+        echo "" >> ~/.cargo/config.toml
+        
+        echo "[target.i686-linux-android]" >> ~/.cargo/config.toml
+        echo "ar = \"$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar\"" >> ~/.cargo/config.toml
+        echo "linker = \"$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android33-clang\"" >> ~/.cargo/config.toml
+        echo "" >> ~/.cargo/config.toml
+        
+        echo "[target.x86_64-linux-android]" >> ~/.cargo/config.toml
+        echo "ar = \"$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar\"" >> ~/.cargo/config.toml
+        echo "linker = \"$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android33-clang\"" >> ~/.cargo/config.toml
+    
+    - name: Build APK
+      run: |
+        # Build the APK
+        cargo apk build --release
+        
+        # Alternative: Build for specific target
+        # cargo apk build --release --target aarch64-linux-android
+    
+    - name: Sign APK (Debug)
+      run: |
+        # For production, you'd use a proper keystore
+        # This creates a debug-signed APK
+        
+        # Find the APK file
+        APK_PATH=$(find target -name "*.apk" -type f | head -1)
+        echo "Found APK at: $APK_PATH"
+        
+        # Create debug keystore if it doesn't exist
+        if [ ! -f debug.keystore ]; then
+          keytool -genkey -v -keystore debug.keystore -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Debug, O=Debug, C=US" \
+            -storepass android -keypass android
+        fi
+        
+        # Sign the APK
+        jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 \
+          -keystore debug.keystore -storepass android -keypass android \
+          "$APK_PATH" androiddebugkey
+        
+        # Align the APK
+        zipalign -v 4 "$APK_PATH" "${APK_PATH%.apk}-aligned.apk"
+        
+        # Move to a standard location
+        mkdir -p dist
+        cp "${APK_PATH%.apk}-aligned.apk" dist/app-release.apk
+    
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: android-apk
+        path: dist/app-release.apk
+        retention-days: 30
+    
+    - name: Upload to release (if release event)
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: dist/app-release.apk
+        asset_name: app-release.apk
+        asset_content_type: application/vnd.android.package-archive
