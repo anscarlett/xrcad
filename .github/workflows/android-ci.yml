@@ -18,17 +18,15 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
+    - name: Clean Cargo and Gradle cache
+      run: |
+        rm -rf target ~/.cargo ~/.gradle
+        
     - name: Setup Java JDK
       uses: actions/setup-java@v3
       with:
         java-version: '17'
         distribution: 'temurin'
-    
-    - name: Setup Android SDK 30
-      uses: android-actions/setup-android@v3
-      with:
-        api-level: 30
-        build-tools: 30.0.3
     
     - name: Setup Android SDK 33
       uses: android-actions/setup-android@v3
