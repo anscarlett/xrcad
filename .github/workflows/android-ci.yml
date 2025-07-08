@@ -25,7 +25,7 @@ jobs:
         distribution: 'temurin'
     
     - name: Setup Android SDK
-      uses: android-actions/setup-android@v4
+      uses: android-actions/setup-android@v3
       with:
         api-level: 33
         build-tools: 33.0.2
@@ -135,7 +135,7 @@ jobs:
         cp "${APK_PATH%.apk}-aligned.apk" dist/app-release.apk
     
     - name: Upload APK artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: android-apk
         path: dist/app-release.apk
