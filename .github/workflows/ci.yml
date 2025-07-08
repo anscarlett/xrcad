@@ -16,21 +16,21 @@ jobs:
           name: xrcad-linux
           path: target/x86_64-unknown-linux-gnu/release/xrcad_app # or your binary name
 
-  build-android:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: rustup target add aarch64-linux-android
-      - run: cargo install cargo-apk cargo-ndk
-      - uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-      - uses: android-actions/setup-android@v3
-      - run: sdkmanager "platforms;android-30"
-      - run: cargo apk build --release
-        working-directory: xrcad_app
-      - uses: actions/upload-artifact@v4
-        with:
-          name: android-apk
-          path: xrcad_app/target/android-artifacts/**/*.apk
+  # build-android:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - run: rustup target add aarch64-linux-android
+  #     - run: cargo install cargo-apk cargo-ndk
+  #     - uses: actions/setup-java@v4
+  #       with:
+  #         distribution: 'temurin'
+  #         java-version: '17'
+  #     - uses: android-actions/setup-android@v3
+  #     - run: sdkmanager "platforms;android-30"
+  #     - run: cargo apk build --release
+  #       working-directory: xrcad_app
+  #     - uses: actions/upload-artifact@v4
+  #       with:
+  #         name: android-apk
+  #         path: xrcad_app/target/android-artifacts/**/*.apk
