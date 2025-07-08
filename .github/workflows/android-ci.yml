@@ -54,15 +54,15 @@ jobs:
     
     - name: Verify Android assets exist
       run: |
-        if [ ! -f "android/AndroidManifest.xml" ]; then
-          echo "Error: android/AndroidManifest.xml not found!"
+        if [ ! -f "xrcad_app/android/AndroidManifest.xml" ]; then
+          echo "Error: xrcad_app/android/AndroidManifest.xml not found!"
           echo "Please create the Android manifest in your repository."
           exit 1
         fi
         
-        if [ ! -d "android/res" ]; then
-          echo "Warning: android/res directory not found. Creating basic structure..."
-          mkdir -p android/res/values
+        if [ ! -d "xrcad_app/android/res" ]; then
+          echo "Warning: xrcad_app/android/res directory not found. Creating basic structure..."
+          mkdir -p xrcad_app/android/res/values
         fi
     
     - name: Setup environment variables
