@@ -1,20 +1,79 @@
-name: Build Bevy App
-on: [push, pull_request]
+name: Build and Package WebGPU App in Android APK
+
+on:
+  push:
+  pull_request:
+
 jobs:
-  build-linux:
+  build-wasm:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          target: x86_64-unknown-linux-gnu
-      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev pkg-config libwayland-dev libxkbcommon-dev
-      - run: cargo build --release --target x86_64-unknown-linux-gnu
-      - uses: actions/upload-artifact@v4
+      - name: Add WASM target
+        run: rustup target add wasm32-unknown-unknown
+      - name: Build WASM
+        run: cargo build --release --target wasm32-unknown-unknown
+      - name: Upload WASM artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: xrcad-linux
-          path: target/x86_64-unknown-linux-gnu/release/xrcad_app # or your binary name
+          name: webgpu-wasm
+          path: target/wasm32-unknown-unknown/release/<your_binary_name>.wasm
+
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Download built WASM artifact
+      - uses: actions/download-artifact@v4
+        with:
+          name: webgpu-wasm
+          path: android_project/app/src/main/assets/
+      # Install JDK and Android SDK/NDK (can use setup-java and custom scripts)
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Install Android SDK
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip
+          wget https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip -O cmdline-tools.zip
+          unzip cmdline-tools.zip -d $HOME/android-sdk/
+          export ANDROID_HOME=$HOME/android-sdk
+          export PATH=$ANDROID_HOME/cmdline-tools/bin:$PATH
+      # Build the APK
+      - name: Build APK
+        run: |
+          cd android_project
+          ./gradlew assembleRelease
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: android_project/app/build/outputs/apk/release/app-release.apk
+
+# name: Build Bevy App
+# on: [push, pull_request]
+# jobs:
+#   build-linux:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
+#       - uses: actions-rs/toolchain@v1
+#         with:
+#           toolchain: stable
+#           target: x86_64-unknown-linux-gnu
+#       - run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev pkg-config libwayland-dev libxkbcommon-dev
+#       - run: cargo build --release --target x86_64-unknown-linux-gnu
+#       - uses: actions/upload-artifact@v4
+#         with:
+#           name: xrcad-linux
+#           path: target/x86_64-unknown-linux-gnu/release/xrcad_app # or your binary name
 
   # build-android:
   #   runs-on: ubuntu-latest
