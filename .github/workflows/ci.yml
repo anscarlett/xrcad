@@ -44,6 +44,7 @@ jobs:
       # Build your Rust WASM project
       - name: Build Rust WASM
         run: |
+          cd xrcad_app
           wasm-pack build --target web --release --out-dir pkg
 
       # Set up Node.js and install Capacitor CLI
