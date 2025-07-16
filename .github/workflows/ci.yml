@@ -21,7 +21,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: webgpu-wasm
-          path: target/wasm32-unknown-unknown/release/<your_binary_name>.wasm
+          path: target/wasm32-unknown-unknown/release/xrcad_app.wasm
 
   build-apk:
     runs-on: ubuntu-latest
@@ -51,11 +51,13 @@ jobs:
         run: |
           cd android_project
           ./gradlew assembleRelease
+      - name: Rename APK
+        run: mv android_project/app/build/outputs/apk/release/app-release.apk android_project/app/build/outputs/apk/release/xrcad.apk
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: android_project/app/build/outputs/apk/release/app-release.apk
+          path: android_project/app/build/outputs/apk/release/xrcad.apk
 
 # name: Build Bevy App
 # on: [push, pull_request]
