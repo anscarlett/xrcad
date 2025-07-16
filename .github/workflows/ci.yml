@@ -26,6 +26,7 @@ jobs:
           path: target/wasm32-unknown-unknown/release/xrcad_app.wasm
 
   build-apk:
+    needs: build-wasm
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
