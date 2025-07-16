@@ -59,7 +59,7 @@ jobs:
       - name: Build APK
         run: |
           cd android_project
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease --stacktrace --info
       - name: Rename APK
         run: mv android_project/app/build/outputs/apk/release/app-release.apk android_project/app/build/outputs/apk/release/xrcad.apk
       - name: Upload APK artifact
