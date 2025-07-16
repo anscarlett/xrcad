@@ -24,83 +24,71 @@ jobs:
         with:
           name: webgpu-wasm
           path: target/wasm32-unknown-unknown/release/xrcad_app.wasm
-
   build-apk:
     needs: build-wasm
     runs-on: ubuntu-latest
     steps:
+      # Checkout the repo
       - uses: actions/checkout@v4
-      # Download built WASM artifact
-      - uses: actions/download-artifact@v4
+
+      # Set up Rust and wasm-pack (assuming your WASM job uses this)
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
         with:
-          name: webgpu-wasm
-          path: android_project/app/src/main/assets/
-      # Install JDK and Android SDK/NDK (can use setup-java and custom scripts)
-      - name: Set up JDK
-        uses: actions/setup-java@v3
+          toolchain: stable
+          override: true
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
+
+      # Build your Rust WASM project
+      - name: Build Rust WASM
+        run: |
+          wasm-pack build --target web --release --out-dir pkg
+
+      # Set up Node.js and install Capacitor CLI
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
-      - name: Install Android SDK
+          node-version: '20'
+
+      - name: Install Capacitor CLI
+        run: npm install -g @capacitor/cli
+
+      # Make a minimal Capacitor webapp
+      - name: Create webapp
         run: |
-          sudo apt-get update
-          sudo apt-get install -y wget unzip
-          wget https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip -O cmdline-tools.zip
-          unzip cmdline-tools.zip -d $HOME/android-sdk/
-          export ANDROID_HOME=$HOME/android-sdk
-          export PATH=$ANDROID_HOME/cmdline-tools/bin:$PATH
-      - name: Generate Gradle wrapper if missing
+          npx create-react-app webapp
+          cd webapp
+          npx cap init wasmapp com.example.wasmapp --web-dir build
+
+      # Copy Rust WASM output into webapp's public directory
+      - name: Copy WASM to webapp
         run: |
-          cd android_project
-          if [ ! -f ./gradlew ]; then
-            gradle wrapper
-          fi
-      # Build the APK
+          cp -r pkg webapp/public/wasm
+
+      # Build the webapp
+      - name: Build webapp
+        run: |
+          cd webapp
+          npm run build
+
+      # Add Android platform and sync web build
+      - name: Add Android platform
+        run: |
+          cd webapp
+          npx cap add android
+          npx cap sync android
+
+      # Build the APK using Gradle
       - name: Build APK
         run: |
-          cd android_project
-          ./gradlew assembleRelease --stacktrace --info
-      - name: Rename APK
-        run: mv android_project/app/build/outputs/apk/release/app-release.apk android_project/app/build/outputs/apk/release/xrcad.apk
-      - name: Upload APK artifact
+          cd webapp/android
+          ./gradlew assembleDebug
+
+      # Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: android-apk
-          path: android_project/app/build/outputs/apk/release/xrcad.apk
-
-# name: Build Bevy App
-# on: [push, pull_request]
-# jobs:
-#   build-linux:
-#     runs-on: ubuntu-latest
-#     steps:
-#       - uses: actions/checkout@v4
-#       - uses: actions-rs/toolchain@v1
-#         with:
-#           toolchain: stable
-#           target: x86_64-unknown-linux-gnu
-#       - run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev pkg-config libwayland-dev libxkbcommon-dev
-#       - run: cargo build --release --target x86_64-unknown-linux-gnu
-#       - uses: actions/upload-artifact@v4
-#         with:
-#           name: xrcad-linux
-#           path: target/x86_64-unknown-linux-gnu/release/xrcad_app # or your binary name
-
-  # build-android:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - run: rustup target add aarch64-linux-android
-  #     - run: cargo install cargo-apk cargo-ndk
-  #     - uses: actions/setup-java@v4
-  #       with:
-  #         distribution: 'temurin'
-  #         java-version: '17'
-  #     - uses: android-actions/setup-android@v3
-  #     - run: sdkmanager "platforms;android-30"
-  #     - run: cargo apk build --release
-  #       working-directory: xrcad_app
-  #     - uses: actions/upload-artifact@v4
-  #       with:
-  #         name: android-apk
-  #         path: xrcad_app/target/android-artifacts/**/*.apk
+          name: rust-wasm-capacitor-apk
+          path: webapp/android/app/build/outputs/apk/debug/app-debug.apk
