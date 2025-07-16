@@ -49,6 +49,12 @@ jobs:
           unzip cmdline-tools.zip -d $HOME/android-sdk/
           export ANDROID_HOME=$HOME/android-sdk
           export PATH=$ANDROID_HOME/cmdline-tools/bin:$PATH
+      - name: Generate Gradle wrapper if missing
+        run: |
+          cd android_project
+          if [ ! -f ./gradlew ]; then
+            gradle wrapper
+          fi
       # Build the APK
       - name: Build APK
         run: |
