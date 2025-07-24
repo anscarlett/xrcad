@@ -7,8 +7,6 @@
 //! - View manipulation
 
 pub mod camera;
-pub mod camera_control;
 
 // Re-export commonly used types
 pub use camera::*;
-pub use camera_control::*;

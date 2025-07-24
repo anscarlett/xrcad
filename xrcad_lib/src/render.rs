@@ -8,9 +8,11 @@
 
 pub mod ghosting;
 pub mod hilighting;
+pub mod lighting;
 pub mod materials;
 
 // Re-export commonly used types
 pub use ghosting::*;
 pub use hilighting::*;
+pub use lighting::*;
 pub use materials::*;

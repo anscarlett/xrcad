@@ -9,6 +9,7 @@
 //! - assembly: Hierarchical organization of model objects (future)
 
 pub mod brep;
+pub mod brep_model;
 pub mod geometry;
 pub mod material;
 pub mod body_properties;
