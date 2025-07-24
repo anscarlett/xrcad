@@ -32,7 +32,7 @@ pub enum PlaneOrigin {
     LineAngle { point: Point3<f64>, direction: Vector3<f64>, angle: f64 },
     StandardXY,
     StandardYZ,
-    StandardZX,
+    StandardXZ,
     Unknown,
 }
 
@@ -138,14 +138,14 @@ impl CorePlane {
         }
     }
 
-    /// Construct the ZX plane (y=0)
-    pub fn zx() -> Self {
-        let result = plane_utils::construct_zx_plane();
+    /// Construct the XZ plane (y=0)
+    pub fn xz() -> Self {
+        let result = plane_utils::construct_xz_plane();
         Self {
             normal: result.normal,
             d: result.d_coefficient,
             origin: result.origin,
-            construction_origin: PlaneOrigin::StandardZX,
+            construction_origin: PlaneOrigin::StandardXZ,
         }
     }
 
@@ -185,6 +185,7 @@ pub struct BrepPlane {
     pub visible: bool,
     /// Current render mode (for debugging/visualization)
     pub render_mode: PlaneRenderMode,
+    pub render_color: Color,
 }
 
 impl BrepPlane {
@@ -196,6 +197,7 @@ impl BrepPlane {
             facing: true,
             visible: false, // BREP planes are typically not visible by default
             render_mode: PlaneRenderMode::Wireframe,
+            render_color: Color::srgba(0.5, 0.5, 0.5, 0.3), // Default gray color
         }
     }
 
@@ -217,7 +219,7 @@ impl BrepPlane {
     /// Create standard planes
     pub fn xy() -> Self { Self::new(CorePlane::xy()) }
     pub fn yz() -> Self { Self::new(CorePlane::yz()) }
-    pub fn zx() -> Self { Self::new(CorePlane::zx()) }
+    pub fn plane_xz() -> Self { Self::new(CorePlane::xz()) }
 
     /// Returns a new plane rotated around its normal by the given angle (radians)
     pub fn rotate_around_normal(&self, angle: f64, center: Option<Point3<f64>>) -> Self {
@@ -267,6 +269,10 @@ impl BrepPlane {
     /// Set the render mode (for debugging/visualization)
     pub fn set_render_mode(&mut self, mode: PlaneRenderMode) {
         self.render_mode = mode;
+    }
+    
+    pub fn set_render_color(&mut self, color: Color) {
+        self.render_color = color;
     }
 
     /// Signed distance from a point to the plane
@@ -337,7 +343,7 @@ pub struct ConstructionPlane {
     /// Render mode
     pub render_mode: PlaneRenderMode,
     /// Render color
-    pub color: Color,
+    pub render_color: Color,
 }
 
 impl ConstructionPlane {
@@ -348,7 +354,7 @@ impl ConstructionPlane {
             size: 100.0,
             rotation: 0.0,
             render_mode: PlaneRenderMode::Grid,
-            color: Color::srgba(0.5, 0.5, 0.5, 0.3),
+            render_color: Color::srgba(0.5, 0.5, 0.5, 0.3),
         }
     }
 
@@ -387,11 +393,22 @@ impl ConstructionPlane {
     /// Create standard planes
     pub fn xy() -> Self { Self::new(CorePlane::xy()) }
     pub fn yz() -> Self { Self::new(CorePlane::yz()) }
-    pub fn zx() -> Self { Self::new(CorePlane::zx()) }
+    pub fn xz() -> Self { Self::new(CorePlane::xz()) }
 
     /// Set the render mode
     pub fn set_render_mode(&mut self, mode: PlaneRenderMode) {
         self.render_mode = mode;
+    }
+
+    /// Set the render color
+    pub fn set_render_color(&mut self, color: Color) {
+        self.render_color = color;
+    }
+
+    /// Set the render color
+    pub fn set_render_color_alpha(&mut self, color: Color, alpha: f32) {
+        self.render_color = color;
+        self.render_color.set_alpha(alpha);
     }
 
     /// Render the construction plane
@@ -413,7 +430,7 @@ impl ConstructionPlane {
             self.core.normal_bevy(),
             self.size,
             10.0, // grid spacing
-            self.color,
+            self.render_color,
         );
     }
 
@@ -423,7 +440,7 @@ impl ConstructionPlane {
             self.core.origin_bevy(),
             self.core.normal_bevy(),
             self.size,
-            self.color,
+            self.render_color,
         );
     }
 
@@ -433,7 +450,7 @@ impl ConstructionPlane {
             self.core.origin_bevy(),
             self.core.normal_bevy(),
             self.size,
-            self.color,
+            self.render_color,
         );
     }
 
@@ -443,7 +460,7 @@ impl ConstructionPlane {
             self.core.origin_bevy(),
             self.core.normal_bevy(),
             self.size,
-            self.color,
+            self.render_color,
         );
     }
 

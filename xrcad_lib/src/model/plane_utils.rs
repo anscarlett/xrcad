@@ -307,8 +307,8 @@ pub fn construct_yz_plane() -> PlaneConstructionResult {
     }
 }
 
-/// Construct the ZX plane (y=0) in nalgebra coordinates
-pub fn construct_zx_plane() -> PlaneConstructionResult {
+/// Construct the XZ plane (y=0) in nalgebra coordinates
+pub fn construct_xz_plane() -> PlaneConstructionResult {
     PlaneConstructionResult {
         normal: Vector3::y(),
         origin: Point3::origin(),
@@ -370,8 +370,8 @@ pub fn construct_bevy_yz_plane() -> BevyPlaneResult {
     }
 }
 
-/// Construct ZX plane in Bevy coordinates (y=0)
-pub fn construct_bevy_zx_plane() -> BevyPlaneResult {
+/// Construct XZ plane in Bevy coordinates (y=0)
+pub fn construct_bevy_xz_plane() -> BevyPlaneResult {
     BevyPlaneResult {
         normal: Vec3::Y,
         origin: Vec3::ZERO,

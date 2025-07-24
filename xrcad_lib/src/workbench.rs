@@ -26,6 +26,7 @@ use bevy::ecs::resource::Resource;
 use bevy::ecs::system::Res;
 use bevy::gizmos::gizmos::Gizmos;
 use crate::model::geometry::{ConstructionPlane, PlaneRenderMode};
+use crate::color::{RED as xrcad_red, GREEN as xrcad_green, BLUE as xrcad_blue};
 
 #[derive(Debug, Clone)]
 pub enum HelperKind {
@@ -53,13 +54,23 @@ impl Default for Workbench {
         let mut wb = Workbench { helpers: Vec::new() };
         wb.add_helper("coordinate_system", HelperKind::CoordinateSystem(CoordinateSystem::default()));
         wb.add_helper("axes", HelperKind::Axes(Axes::default()));
-        wb.add_helper("grid", HelperKind::Grid(Grid::default()));
         
-        // Add default construction planes
-        let default_plane_names = ["front", "right", "top"];
-        for name in default_plane_names {
-            wb.add_helper(name, HelperKind::Plane(ConstructionPlane::default()));
-        }
+        // Add the three standard construction planes with colors and wireframe mode
+        let mut plane_xy = ConstructionPlane::xy();
+        plane_xy.set_render_mode(PlaneRenderMode::Grid);
+        plane_xy.set_render_color_alpha(xrcad_red, 0.15);
+        wb.add_helper("plane_xy", HelperKind::Plane(plane_xy));
+        
+        let mut plane_xz = ConstructionPlane::xz();
+        plane_xz.set_render_mode(PlaneRenderMode::Grid);
+        plane_xz.set_render_color_alpha(xrcad_green, 0.15);
+        wb.add_helper("plane_xz", HelperKind::Plane(plane_xz));
+        
+        let mut plane_yz = ConstructionPlane::yz();
+        plane_yz.set_render_mode(PlaneRenderMode::Grid);
+        plane_yz.set_render_color_alpha(xrcad_blue, 0.15);
+        wb.add_helper("plane_yz", HelperKind::Plane(plane_yz));
+        
         wb
     }
 }
@@ -96,6 +107,16 @@ impl Workbench {
             if helper.id == id {
                 if let HelperKind::Plane(plane) = &mut helper.kind {
                     plane.set_render_mode(mode);
+                }
+            }
+        }
+    }
+
+    pub fn set_plane_render_colour(&mut self, id: &str, color: bevy::prelude::Color) {
+        for helper in &mut self.helpers {
+            if helper.id == id {
+                if let HelperKind::Plane(plane) = &mut helper.kind {
+                    plane.set_render_color(color);
                 }
             }
         }

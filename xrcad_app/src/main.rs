@@ -23,55 +23,29 @@ impl Default for CameraUiState {
     }
 }
 
+// Light control marker component
+#[derive(Component)]
+struct LightController;
+
 use xrcad_lib::viewport::camera_control::{CustomCameraController, camera_control_system};
 
 use xrcad_lib::{
     Workbench,
-    HelperKind,
-    ConstructionPlane, PlaneRenderMode,
     cube, // Only import what we're using
     PrimitiveResult, // Import the result type
 };
 
 
-use nalgebra::Point3;
-
-
-use nalgebra::{Vector3};
 
 
 
 fn main() {
     // Insert default camera UI state
     let camera_ui_state = CameraUiState::default();
-    // --- Plane test cases ---
-    let plane_yz = ConstructionPlane::yz();
-    let plane_3pts = ConstructionPlane::from_points(
-        Point3::new(0.0, 0.0, -100.0),
-        Point3::new(100.0, 0.0, 0.0),
-        Point3::new(100.0, 100.0, 0.0),
-    ).expect("Failed to create plane from 3 points");
-
-    let plane_rot = {
-        let mut p = ConstructionPlane::from_point_normal(Point3::new(0.0, 0.0, 0.0), Vector3::new(0.0, 1.0, 1.0), None)
-            .expect("Failed to create plane from point and normal");
-        p.rotation = std::f64::consts::FRAC_PI_4; // 45 deg
-        p.render_mode = PlaneRenderMode::Highlighted;
-        p
-    };
-    // Add test planes to the workspace as helpers so they get rendered
-    let mut workbench = Workbench::default();
-    workbench.add_helper("test_plane_xy", HelperKind::Plane(plane_yz));
-    workbench.add_helper("test_plane_3pts", HelperKind::Plane(plane_3pts));
-    workbench.add_helper("test_plane_rot", HelperKind::Plane(plane_rot));
-
-    // Set render modes for the test planes
-    workbench.set_plane_render_mode("test_plane_xy", PlaneRenderMode::Grid);
-    workbench.set_plane_render_mode("test_plane_3pts", PlaneRenderMode::Ghosted);
-    workbench.set_plane_render_mode("test_plane_rot", PlaneRenderMode::Highlighted);
+    let workbench = Workbench::default();
 
     // Create a cube using the primitives library
-    let cube_geometry = cube(200.0); // 200mm cube
+    let cube_geometry = cube(50.0); // 200mm cube
     println!("Created cube with {} vertices, {} edges, {} faces", 
              cube_geometry.vertices.len(), 
              cube_geometry.edges.len(), 
@@ -103,6 +77,8 @@ fn main() {
         .add_systems(Startup, (setup, setup_ui))
         .add_systems(Update, update_ui_panel)
         .add_systems(Update, camera_ui_panel)
+        .add_systems(Update, light_control_system)
+        .add_systems(Update, render_light_axes)
         .add_systems(Startup, render_brep_geometry)
         .add_systems(Update, Workbench::workbench_render_system);
 
@@ -116,12 +92,101 @@ fn main() {
     app.run();
 }
 
+// Light control system
+fn light_control_system(
+    mut light_query: Query<&mut Transform, (With<DirectionalLight>, With<LightController>)>,
+    keyboard: Res<ButtonInput<KeyCode>>,
+    time: Res<Time>,
+) {
+    if let Ok(mut light_transform) = light_query.single_mut() {
+        let move_speed = 200.0; // units per second
+        let dt = time.delta_secs();
+        
+        // Check for Shift+Arrow keys and PageUp/PageDown
+        let shift_pressed = keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight);
+        
+        if shift_pressed {
+            let mut movement = Vec3::ZERO;
+            
+            if keyboard.pressed(KeyCode::ArrowLeft) {
+                movement.x -= move_speed * dt;
+            }
+            if keyboard.pressed(KeyCode::ArrowRight) {
+                movement.x += move_speed * dt;
+            }
+            if keyboard.pressed(KeyCode::ArrowUp) {
+                movement.z -= move_speed * dt;
+            }
+            if keyboard.pressed(KeyCode::ArrowDown) {
+                movement.z += move_speed * dt;
+            }
+            if keyboard.pressed(KeyCode::PageUp) {
+                movement.y += move_speed * dt;
+            }
+            if keyboard.pressed(KeyCode::PageDown) {
+                movement.y -= move_speed * dt;
+            }
+            
+            if movement != Vec3::ZERO {
+                light_transform.translation += movement;
+                // Keep the light looking at origin
+                *light_transform = light_transform.looking_at(Vec3::ZERO, Vec3::Y);
+            }
+        }
+    }
+}
+
+// System to render light position axes using gizmos
+fn render_light_axes(
+    mut gizmos: Gizmos,
+    light_query: Query<&Transform, (With<DirectionalLight>, With<LightController>)>,
+) {
+    if let Ok(light_transform) = light_query.single() {
+        let position = light_transform.translation;
+        let axis_length = 100.0;
+        
+        // Draw coordinate axes at light position
+        // X-axis (Red)
+        gizmos.line(
+            position,
+            position + Vec3::X * axis_length,
+            Color::srgb(1.0, 0.0, 0.0),
+        );
+        
+        // Y-axis (Green)
+        gizmos.line(
+            position,
+            position + Vec3::Y * axis_length,
+            Color::srgb(0.0, 1.0, 0.0),
+        );
+        
+        // Z-axis (Blue)
+        gizmos.line(
+            position,
+            position + Vec3::Z * axis_length,
+            Color::srgb(0.0, 0.0, 1.0),
+        );
+        
+        // Draw a small sphere at the light position
+        gizmos.sphere(position, 20.0, Color::srgb(1.0, 1.0, 0.8));
+        
+        // Draw a line from light to origin to show light direction
+        gizmos.line(
+            position,
+            Vec3::ZERO,
+            Color::srgb(1.0, 1.0, 0.0).with_alpha(0.5),
+        );
+    }
+}
+
 // Camera UI panel system (Bevy UI only)
 fn camera_ui_panel(
     mut ui_state: ResMut<CameraUiState>,
     mut text_query: Query<&mut Text, With<CameraPanelText>>,
-    mut camera_query: Query<&mut CustomCameraController>,
+    mut camera_query: Query<(&mut Transform, &mut CustomCameraController)>,
+    light_query: Query<&Transform, (With<DirectionalLight>, With<LightController>, Without<CustomCameraController>)>,
     keyboard: Res<ButtonInput<KeyCode>>,
+    time: Res<Time>,
 ) {
     // Adjust camera parameters with keys (Bevy 0.13+ KeyCode)
     if keyboard.just_pressed(KeyCode::KeyP) {
@@ -148,15 +213,75 @@ fn camera_ui_panel(
     if keyboard.just_pressed(KeyCode::F2) {
         ui_state.is_stereo = !ui_state.is_stereo;
     }
-    // Update camera controller with new sensitivities
-    for mut cam in camera_query.iter_mut() {
-        cam.pan_sensitivity = ui_state.pan_sensitivity;
-        cam.rotate_sensitivity = ui_state.rotate_sensitivity;
-        cam.zoom_sensitivity = ui_state.zoom_sensitivity;
-        cam.is_xr = ui_state.is_xr;
-        cam.is_stereo = ui_state.is_stereo;
+
+    // Arrow key camera rotation around origin (only when Shift is NOT pressed)
+    if let Ok((mut camera_transform, mut camera_controller)) = camera_query.single_mut() {
+        let rotation_speed: f32 = 90.0; // degrees per second
+        let dt = time.delta_secs();
+        
+        let shift_pressed = keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight);
+        
+        // Check if any arrow keys are pressed (but not with Shift)
+        let arrow_pressed = !shift_pressed && (keyboard.pressed(KeyCode::ArrowLeft) || 
+                           keyboard.pressed(KeyCode::ArrowRight) || 
+                           keyboard.pressed(KeyCode::ArrowUp) || 
+                           keyboard.pressed(KeyCode::ArrowDown));
+        
+        if arrow_pressed {
+            // Get current camera position relative to origin
+            let current_pos = camera_transform.translation;
+            let distance = current_pos.length();
+            
+            // Convert current position to spherical coordinates
+            let mut azimuth = current_pos.z.atan2(current_pos.x); // angle around Y axis
+            let mut elevation = (current_pos.y / distance).asin(); // angle from XZ plane
+            
+            // Apply arrow key rotations
+            if keyboard.pressed(KeyCode::ArrowLeft) {
+                azimuth += rotation_speed.to_radians() * dt;
+            }
+            if keyboard.pressed(KeyCode::ArrowRight) {
+                azimuth -= rotation_speed.to_radians() * dt;
+            }
+            if keyboard.pressed(KeyCode::ArrowUp) {
+                elevation += rotation_speed.to_radians() * dt;
+            }
+            if keyboard.pressed(KeyCode::ArrowDown) {
+                elevation -= rotation_speed.to_radians() * dt;
+            }
+            
+            // Wrap azimuth around (0 to 2π)
+            azimuth = azimuth % (2.0 * std::f32::consts::PI);
+            if azimuth < 0.0 {
+                azimuth += 2.0 * std::f32::consts::PI;
+            }
+            
+            // Clamp elevation to ±85 degrees
+            let max_elevation = 85.0_f32.to_radians();
+            elevation = elevation.clamp(-max_elevation, max_elevation);
+            
+            // Convert back to Cartesian coordinates
+            let cos_elevation = elevation.cos();
+            let new_position = Vec3::new(
+                distance * cos_elevation * azimuth.cos(),
+                distance * elevation.sin(),
+                distance * cos_elevation * azimuth.sin(),
+            );
+            
+            // Update camera position and make it look at origin
+            camera_transform.translation = new_position;
+            *camera_transform = camera_transform.looking_at(Vec3::ZERO, Vec3::Y);
+        }
+
+        // Update camera controller with new sensitivities
+        camera_controller.pan_sensitivity = ui_state.pan_sensitivity;
+        camera_controller.rotate_sensitivity = ui_state.rotate_sensitivity;
+        camera_controller.zoom_sensitivity = ui_state.zoom_sensitivity;
+        camera_controller.is_xr = ui_state.is_xr;
+        camera_controller.is_stereo = ui_state.is_stereo;
     }
-    // Update UI text panel with camera info
+
+    // Update UI text panel with camera and light info
     if let Some(mut text) = text_query.iter_mut().next() {
         let mut content = String::from("Camera Controls:\n");
         content.push_str(&format!("Pan Sensitivity: {:.2} (P/O)\n", ui_state.pan_sensitivity));
@@ -164,6 +289,19 @@ fn camera_ui_panel(
         content.push_str(&format!("Zoom Sensitivity: {:.2} (Z/X)\n", ui_state.zoom_sensitivity));
         content.push_str(&format!("XR Enabled: {} (F1)\n", ui_state.is_xr));
         content.push_str(&format!("Stereo Enabled: {} (F2)\n", ui_state.is_stereo));
+        content.push_str("\nArrow Keys: Rotate camera around origin\n");
+        content.push_str("↑↓: Elevation (±85°)\n");
+        content.push_str("←→: Azimuth (360°)\n");
+        content.push_str("\nLight Controls:\n");
+        content.push_str("Shift+Arrow Keys: Move light X/Z\n");
+        content.push_str("PageUp/PageDown: Move light Y\n");
+        
+        // Show light position if available
+        if let Ok(light_transform) = light_query.single() {
+            let pos = light_transform.translation;
+            content.push_str(&format!("Light Position: ({:.0}, {:.0}, {:.0})\n", pos.x, pos.y, pos.z));
+        }
+        
         text.0 = content;
     }
 }
@@ -194,9 +332,11 @@ fn setup(
             ..default()
         },
         Transform::from_xyz(1000.0, 1000.0, 1000.0).looking_at(Vec3::ZERO, Vec3::Y),
+        LightController,
     ));
 
 }
+
 /// System to render BREP geometry as Bevy meshes
 fn render_brep_geometry(
     mut commands: Commands,
@@ -204,121 +344,168 @@ fn render_brep_geometry(
     mut materials: ResMut<Assets<StandardMaterial>>,
     brep: Res<PrimitiveResult>,
 ) {
-    // Create vertices for the mesh
-    let mut mesh_vertices = Vec::new();
-    let mut indices = Vec::new();
-    let mut normals = Vec::new();
-    
-    // For proper cube normals, we need to duplicate vertices for each face
-    // since each face has different normals
-    
-    // Bottom face (normal: [0, 0, -1])
-    let bottom_normal = [0.0f32, 0.0f32, -1.0f32];
-    mesh_vertices.extend_from_slice(&[
-        [brep.vertices[0].position.x as f32, brep.vertices[0].position.y as f32, brep.vertices[0].position.z as f32],
-        [brep.vertices[1].position.x as f32, brep.vertices[1].position.y as f32, brep.vertices[1].position.z as f32],
-        [brep.vertices[2].position.x as f32, brep.vertices[2].position.y as f32, brep.vertices[2].position.z as f32],
-        [brep.vertices[3].position.x as f32, brep.vertices[3].position.y as f32, brep.vertices[3].position.z as f32],
-    ]);
-    normals.extend_from_slice(&[bottom_normal, bottom_normal, bottom_normal, bottom_normal]);
-    indices.extend_from_slice(&[0, 2, 1, 0, 3, 2]);
-    
-    // Top face (normal: [0, 0, 1])
-    let top_normal = [0.0f32, 0.0f32, 1.0f32];
-    let base_idx = mesh_vertices.len() as u32;
-    mesh_vertices.extend_from_slice(&[
-        [brep.vertices[4].position.x as f32, brep.vertices[4].position.y as f32, brep.vertices[4].position.z as f32],
-        [brep.vertices[5].position.x as f32, brep.vertices[5].position.y as f32, brep.vertices[5].position.z as f32],
-        [brep.vertices[6].position.x as f32, brep.vertices[6].position.y as f32, brep.vertices[6].position.z as f32],
-        [brep.vertices[7].position.x as f32, brep.vertices[7].position.y as f32, brep.vertices[7].position.z as f32],
-    ]);
-    normals.extend_from_slice(&[top_normal, top_normal, top_normal, top_normal]);
-    indices.extend_from_slice(&[base_idx, base_idx+1, base_idx+2, base_idx, base_idx+2, base_idx+3]);
-    
-    // Front face (normal: [0, -1, 0])
-    let front_normal = [0.0f32, -1.0f32, 0.0f32];
-    let base_idx = mesh_vertices.len() as u32;
-    mesh_vertices.extend_from_slice(&[
-        [brep.vertices[0].position.x as f32, brep.vertices[0].position.y as f32, brep.vertices[0].position.z as f32],
-        [brep.vertices[1].position.x as f32, brep.vertices[1].position.y as f32, brep.vertices[1].position.z as f32],
-        [brep.vertices[5].position.x as f32, brep.vertices[5].position.y as f32, brep.vertices[5].position.z as f32],
-        [brep.vertices[4].position.x as f32, brep.vertices[4].position.y as f32, brep.vertices[4].position.z as f32],
-    ]);
-    normals.extend_from_slice(&[front_normal, front_normal, front_normal, front_normal]);
-    indices.extend_from_slice(&[base_idx, base_idx+2, base_idx+1, base_idx, base_idx+3, base_idx+2]);
-    
-    // Back face (normal: [0, 1, 0])
-    let back_normal = [0.0f32, 1.0f32, 0.0f32];
-    let base_idx = mesh_vertices.len() as u32;
-    mesh_vertices.extend_from_slice(&[
-        [brep.vertices[3].position.x as f32, brep.vertices[3].position.y as f32, brep.vertices[3].position.z as f32],
-        [brep.vertices[2].position.x as f32, brep.vertices[2].position.y as f32, brep.vertices[2].position.z as f32],
-        [brep.vertices[6].position.x as f32, brep.vertices[6].position.y as f32, brep.vertices[6].position.z as f32],
-        [brep.vertices[7].position.x as f32, brep.vertices[7].position.y as f32, brep.vertices[7].position.z as f32],
-    ]);
-    normals.extend_from_slice(&[back_normal, back_normal, back_normal, back_normal]);
-    indices.extend_from_slice(&[base_idx, base_idx+1, base_idx+2, base_idx, base_idx+2, base_idx+3]);
-    
-    // Left face (normal: [-1, 0, 0])
-    let left_normal = [-1.0f32, 0.0f32, 0.0f32];
-    let base_idx = mesh_vertices.len() as u32;
-    mesh_vertices.extend_from_slice(&[
-        [brep.vertices[0].position.x as f32, brep.vertices[0].position.y as f32, brep.vertices[0].position.z as f32],
-        [brep.vertices[3].position.x as f32, brep.vertices[3].position.y as f32, brep.vertices[3].position.z as f32],
-        [brep.vertices[7].position.x as f32, brep.vertices[7].position.y as f32, brep.vertices[7].position.z as f32],
-        [brep.vertices[4].position.x as f32, brep.vertices[4].position.y as f32, brep.vertices[4].position.z as f32],
-    ]);
-    normals.extend_from_slice(&[left_normal, left_normal, left_normal, left_normal]);
-    indices.extend_from_slice(&[base_idx, base_idx+2, base_idx+1, base_idx, base_idx+3, base_idx+2]);
-    
-    // Right face (normal: [1, 0, 0])
-    let right_normal = [1.0f32, 0.0f32, 0.0f32];
-    let base_idx = mesh_vertices.len() as u32;
-    mesh_vertices.extend_from_slice(&[
-        [brep.vertices[1].position.x as f32, brep.vertices[1].position.y as f32, brep.vertices[1].position.z as f32],
-        [brep.vertices[2].position.x as f32, brep.vertices[2].position.y as f32, brep.vertices[2].position.z as f32],
-        [brep.vertices[6].position.x as f32, brep.vertices[6].position.y as f32, brep.vertices[6].position.z as f32],
-        [brep.vertices[5].position.x as f32, brep.vertices[5].position.y as f32, brep.vertices[5].position.z as f32],
-    ]);
-    normals.extend_from_slice(&[right_normal, right_normal, right_normal, right_normal]);
-    indices.extend_from_slice(&[base_idx, base_idx+1, base_idx+2, base_idx, base_idx+2, base_idx+3]);
-    
-    // Create UVs (simple planar mapping for each face)
-    let mut uvs = Vec::new();
-    for _ in 0..6 { // 6 faces
-        uvs.extend_from_slice(&[
+    // Create 6 different colored materials for each face
+    // Your requested color scheme: +X red, -X magenta, +Y green, -Y yellow, +Z blue, -Z cyan
+    let materials_vec = vec![
+        materials.add(StandardMaterial {
+            base_color: Color::srgb(1.0, 1.0, 0.0), // Yellow - Bottom face (-Y)
+            metallic: 0.1,
+            perceptual_roughness: 0.5,
+            ..default()
+        }),
+        materials.add(StandardMaterial {
+            base_color: Color::srgb(0.0, 1.0, 0.0), // Green - Top face (+Y) 
+            metallic: 0.1,
+            perceptual_roughness: 0.5,
+            ..default()
+        }),
+        materials.add(StandardMaterial {
+            base_color: Color::srgb(0.0, 1.0, 1.0), // Cyan - Back face (-Z)
+            metallic: 0.1,
+            perceptual_roughness: 0.5,
+            ..default()
+        }),
+        materials.add(StandardMaterial {
+            base_color: Color::srgb(0.0, 0.0, 1.0), // Blue - Front face (+Z)
+            metallic: 0.1,
+            perceptual_roughness: 0.5,
+            ..default()
+        }),
+        materials.add(StandardMaterial {
+            base_color: Color::srgb(1.0, 0.0, 1.0), // Magenta - Left face (-X)
+            metallic: 0.1,
+            perceptual_roughness: 0.5,
+            ..default()
+        }),
+        materials.add(StandardMaterial {
+            base_color: Color::srgb(1.0, 0.0, 0.0), // Red - Right face (+X)
+            metallic: 0.1,
+            perceptual_roughness: 0.5,
+            ..default()
+        }),
+    ];
+
+    // Cube vertex layout (from platonic.rs):
+    // 0: (-half, -half, -half)  1: (+half, -half, -half)  
+    // 2: (+half, +half, -half)  3: (-half, +half, -half)
+    // 4: (-half, -half, +half)  5: (+half, -half, +half)
+    // 6: (+half, +half, +half)  7: (-half, +half, +half)
+
+    let face_data = [
+        // Bottom face (YELLOW) - Y = -half, normal: [0, -1, 0] 
+        // Vertices: 0,1,5,4 (counter-clockwise when viewed from below)
+        (
+            vec![
+                [brep.vertices[0].position.x as f32, brep.vertices[0].position.y as f32, brep.vertices[0].position.z as f32],
+                [brep.vertices[1].position.x as f32, brep.vertices[1].position.y as f32, brep.vertices[1].position.z as f32],
+                [brep.vertices[5].position.x as f32, brep.vertices[5].position.y as f32, brep.vertices[5].position.z as f32],
+                [brep.vertices[4].position.x as f32, brep.vertices[4].position.y as f32, brep.vertices[4].position.z as f32],
+            ],
+            vec![[0.0f32, -1.0f32, 0.0f32]; 4],
+            vec![0u32, 1, 2, 0, 2, 3], // Two triangles
+            0, // Yellow material index
+        ),
+        // Top face (GREEN) - Y = +half, normal: [0, 1, 0]
+        // Vertices: 7,6,2,3 (counter-clockwise when viewed from above)
+        (
+            vec![
+                [brep.vertices[7].position.x as f32, brep.vertices[7].position.y as f32, brep.vertices[7].position.z as f32],
+                [brep.vertices[6].position.x as f32, brep.vertices[6].position.y as f32, brep.vertices[6].position.z as f32],
+                [brep.vertices[2].position.x as f32, brep.vertices[2].position.y as f32, brep.vertices[2].position.z as f32],
+                [brep.vertices[3].position.x as f32, brep.vertices[3].position.y as f32, brep.vertices[3].position.z as f32],
+            ],
+            vec![[0.0f32, 1.0f32, 0.0f32]; 4],
+            vec![0u32, 1, 2, 0, 2, 3], // Two triangles
+            1, // Green material index
+        ),
+        // Back face (CYAN) - Z = -half, normal: [0, 0, -1]
+        // Vertices: 3,2,1,0 (counter-clockwise when viewed from back)
+        (
+            vec![
+                [brep.vertices[3].position.x as f32, brep.vertices[3].position.y as f32, brep.vertices[3].position.z as f32],
+                [brep.vertices[2].position.x as f32, brep.vertices[2].position.y as f32, brep.vertices[2].position.z as f32],
+                [brep.vertices[1].position.x as f32, brep.vertices[1].position.y as f32, brep.vertices[1].position.z as f32],
+                [brep.vertices[0].position.x as f32, brep.vertices[0].position.y as f32, brep.vertices[0].position.z as f32],
+            ],
+            vec![[0.0f32, 0.0f32, -1.0f32]; 4],
+            vec![0u32, 1, 2, 0, 2, 3], // Two triangles
+            2, // Cyan material index
+        ),
+        // Front face (BLUE) - Z = +half, normal: [0, 0, 1]
+        // Vertices: 4,5,6,7 (counter-clockwise when viewed from front)
+        (
+            vec![
+                [brep.vertices[4].position.x as f32, brep.vertices[4].position.y as f32, brep.vertices[4].position.z as f32],
+                [brep.vertices[5].position.x as f32, brep.vertices[5].position.y as f32, brep.vertices[5].position.z as f32],
+                [brep.vertices[6].position.x as f32, brep.vertices[6].position.y as f32, brep.vertices[6].position.z as f32],
+                [brep.vertices[7].position.x as f32, brep.vertices[7].position.y as f32, brep.vertices[7].position.z as f32],
+            ],
+            vec![[0.0f32, 0.0f32, 1.0f32]; 4],
+            vec![0u32, 1, 2, 0, 2, 3], // Two triangles
+            3, // Blue material index
+        ),
+        // Left face (MAGENTA) - X = -half, normal: [-1, 0, 0]
+        // Vertices: 0,4,7,3 (counter-clockwise when viewed from left)
+        (
+            vec![
+                [brep.vertices[0].position.x as f32, brep.vertices[0].position.y as f32, brep.vertices[0].position.z as f32],
+                [brep.vertices[4].position.x as f32, brep.vertices[4].position.y as f32, brep.vertices[4].position.z as f32],
+                [brep.vertices[7].position.x as f32, brep.vertices[7].position.y as f32, brep.vertices[7].position.z as f32],
+                [brep.vertices[3].position.x as f32, brep.vertices[3].position.y as f32, brep.vertices[3].position.z as f32],
+            ],
+            vec![[-1.0f32, 0.0f32, 0.0f32]; 4],
+            vec![0u32, 1, 2, 0, 2, 3], // Two triangles
+            4, // Magenta material index
+        ),
+        // Right face (RED) - X = +half, normal: [1, 0, 0]
+        // Vertices: 1,2,6,5 (counter-clockwise when viewed from right)
+        (
+            vec![
+                [brep.vertices[1].position.x as f32, brep.vertices[1].position.y as f32, brep.vertices[1].position.z as f32],
+                [brep.vertices[2].position.x as f32, brep.vertices[2].position.y as f32, brep.vertices[2].position.z as f32],
+                [brep.vertices[6].position.x as f32, brep.vertices[6].position.y as f32, brep.vertices[6].position.z as f32],
+                [brep.vertices[5].position.x as f32, brep.vertices[5].position.y as f32, brep.vertices[5].position.z as f32],
+            ],
+            vec![[1.0f32, 0.0f32, 0.0f32]; 4],
+            vec![0u32, 1, 2, 0, 2, 3], // Two triangles
+            5, // Red material index
+        ),
+    ];
+
+    // Create each face as a separate mesh entity
+    for (vertices, normals, indices, material_idx) in face_data {
+        // Create UVs
+        let uvs = vec![
             [0.0f32, 0.0f32], [1.0f32, 0.0f32], 
             [1.0f32, 1.0f32], [0.0f32, 1.0f32]
-        ]);
+        ];
+
+        // Create the Bevy mesh
+        let mut mesh = Mesh::new(
+            bevy::render::render_resource::PrimitiveTopology::TriangleList,
+            bevy::render::render_asset::RenderAssetUsages::RENDER_WORLD,
+        );
+
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+        mesh.insert_indices(bevy::render::mesh::Indices::U32(indices));
+
+        // Spawn the mesh entity with the appropriate colored material
+        commands.spawn((
+            Mesh3d(meshes.add(mesh)),
+            MeshMaterial3d(materials_vec[material_idx].clone()),
+            Transform::default(),
+        ));
     }
-    
-    // Create the Bevy mesh
-    let mut mesh = Mesh::new(
-        bevy::render::render_resource::PrimitiveTopology::TriangleList,
-        bevy::render::render_asset::RenderAssetUsages::RENDER_WORLD,
-    );
-    
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, mesh_vertices);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-    mesh.insert_indices(bevy::render::mesh::Indices::U32(indices));
-    
-    // Create material
-    let material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.8, 0.7, 0.6),
-        metallic: 0.1,
-        perceptual_roughness: 0.5,
-        ..default()
-    });
-    
-    // Spawn the mesh entity
-    commands.spawn((
-        Mesh3d(meshes.add(mesh)),
-        MeshMaterial3d(material),
-        Transform::default(),
-    ));
-    
-    println!("Rendered cube geometry as Bevy mesh with proper face normals");
+
+    println!("Rendered cube with your requested color scheme:");
+    println!("  YELLOW = Bottom face (-Y)");
+    println!("  GREEN = Top face (+Y)");
+    println!("  CYAN = Back face (-Z)");
+    println!("  BLUE = Front face (+Z)");
+    println!("  MAGENTA = Left face (-X)");
+    println!("  RED = Right face (+X)");
 }
 
 #[derive(Component)]
