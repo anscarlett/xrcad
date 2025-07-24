@@ -1,39 +1,23 @@
 use bevy::prelude::*;
-use bevy::prelude::{DirectionalLight};
 
-// Camera UI state resource
-#[derive(Resource)]
-struct CameraUiState {
-    pub pan_sensitivity: f32,
-    pub rotate_sensitivity: f32,
-    pub zoom_sensitivity: f32,
-    pub is_xr: bool,
-    pub is_stereo: bool,
-}
+use xrcad_lib::{
+    viewport::camera_control::{
+        CustomCameraController, 
+        camera_control_system
+    },
+    Workbench,
+    cube,
+    PrimitiveResult,
+};
 
-impl Default for CameraUiState {
-    fn default() -> Self {
-        CameraUiState {
-            pan_sensitivity: 0.5,
-            rotate_sensitivity: 0.5,
-            zoom_sensitivity: 0.5,
-            is_xr: false,
-            is_stereo: false,
-        }
-    }
-}
+// Camera UI state resource is now moved to xrcad_lib::viewport::camera_control
 
 // Light control marker component
 #[derive(Component)]
 struct LightController;
 
-use xrcad_lib::viewport::camera_control::{CustomCameraController, camera_control_system};
 
-use xrcad_lib::{
-    Workbench,
-    cube, // Only import what we're using
-    PrimitiveResult, // Import the result type
-};
+
 
 
 
@@ -86,6 +70,7 @@ fn main() {
     #[cfg(feature = "openxr")]
     {
         use bevy_openxr::OpenXrPlugin;
+use xrcad_lib::viewport::camera_control::CameraUiState;
         app.add_plugins(OpenXrPlugin);
     }
 
