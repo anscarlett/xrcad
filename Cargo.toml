@@ -1,4 +1,7 @@
 [workspace]
+
+resolver = "3"
+
 members = [
     "xrcad_lib",
     "xrcad_app"
@@ -8,4 +11,3 @@ members = [
 nalgebra = "0.32"
 bevy = { git = "https://github.com/bevyengine/bevy", branch = "main", features = ["wayland"] }
 bevy_egui = "*"
-
