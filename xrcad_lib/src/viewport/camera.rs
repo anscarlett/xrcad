@@ -1,7 +1,5 @@
 
 use bevy::{input::mouse::{MouseMotion, MouseWheel}, prelude::*,};
-use crate::ui_font::UiFont;
-// use crate::render::lighting::CustomLightController;
 #[derive(Component)]
 #[derive(Resource)]
 pub struct CustomCameraController {
@@ -23,7 +21,6 @@ impl Default for CustomCameraController {
         }
     }
 }
-
 
 pub fn camera_control_and_ui_panel(
     mut text_query: Query<&mut Text, With<CameraPanelText>>, 

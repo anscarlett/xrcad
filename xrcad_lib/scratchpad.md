@@ -1,3 +1,4 @@
+```rust
 use std::collections::HashMap;
 
 /// Common interface for all curve types in CAD applications
@@ -592,3 +593,4 @@ pub struct CurveAnalysis {
     /// Self-intersection points
     pub self_intersections: Vec<Point2D>,
 }
+```
