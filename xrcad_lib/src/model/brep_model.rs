@@ -250,25 +250,33 @@ pub fn render_brep_geometry(
 #[derive(Component)]
 pub struct BrepPanelText;
 
-pub fn setup_brep_ui(mut commands: Commands) {
+pub fn setup_brep_ui(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+) {
     // BREP panel (top left)
     commands.spawn((
         Node {
             position_type: PositionType::Absolute,
             width: Val::Percent(20.0),
             height: Val::Percent(50.0),
-            right: Val::Px(10.0),
+            left: Val::Px(0.0),
             flex_direction: FlexDirection::Column,
             justify_content: JustifyContent::FlexStart,
             align_items: AlignItems::FlexStart,
             ..Default::default()
             },
-        BackgroundColor(Color::srgb(0.1, 0.1, 0.15)),
+        BackgroundColor(Color::srgba(0.1, 0.1, 0.15, 0.5)),
 
     ))
     .with_children(|parent| {
         parent.spawn((
             Text::new("BREP Controls\n\nVertices:\n"),
+            TextFont {
+                font: asset_server.load("fonts/FiraCode-Light.ttf"),
+                font_size: 10.0,
+                ..default()
+            },
             BrepPanelText,
         ));
     });
