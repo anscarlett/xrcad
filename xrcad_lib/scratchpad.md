@@ -798,6 +798,87 @@ impl Constrainable for Face {
     fn degrees_of_freedom(&self) -> i32 { 0 }
 }
 
+// =====================================================  
+// File: src/topology/face.rs
+// =====================================================
+
+use bevy::prelude::*;
+use serde::{Serialize, Deserialize};
+use crate::topology::traits::*;
+use crate::geometry::surfaces_3d::*;
+
+/// Topological face - 2D entity bounded by loops
+#[derive(Debug, Clone, Component, Serialize, Deserialize)]
+pub struct Face {
+    pub id: String,
+    /// Outer boundary loop
+    pub outer_loop: Entity,
+    /// Inner loops (holes)
+    pub inner_loops: Vec<Entity>,
+    /// Reference to geometric surface
+    pub surface: Option<Box<dyn Surface3D>>,
+    /// Connected shells/solids
+    pub shells: Vec<Entity>,
+    /// Applied constraints
+    pub constraints: Vec<Entity>,
+    /// Face properties
+    pub properties: FaceProperties,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FaceProperties {
+    /// Material properties
+    pub material_id: Option<String>,
+    /// Visual properties
+    pub visible: bool,
+    pub color: [f32; 4],
+    pub transparency: f32,
+    /// Face normal orientation
+    pub outward_normal: bool,
+}
+
+impl Default for FaceProperties {
+    fn default() -> Self {
+        Self {
+            material_id: None,
+            visible: true,
+            color: [0.8, 0.8, 0.8, 1.0],
+            transparency: 0.0,
+            outward_normal: true,
+        }
+    }
+}
+
+impl TopologyEntity for Face {
+    fn id(&self) -> String { self.id.clone() }
+    fn entity_type(&self) -> &'static str { "Face" }
+    fn is_valid(&self) -> bool { 
+        // Face needs at least an outer loop
+        true // Simplified
+    }
+    fn children(&self) -> Vec<Entity> { 
+        let mut loops = vec![self.outer_loop];
+        loops.extend(self.inner_loops.clone());
+        loops
+    }
+    fn parents(&self) -> Vec<Entity> { self.shells.clone() }
+}
+
+impl Constrainable for Face {
+    fn constraints(&self) -> Vec<Entity> { self.constraints.clone() }
+    fn add_constraint(&mut self, constraint: Entity) { self.constraints.push(constraint); }
+    fn remove_constraint(&mut self, constraint: Entity) -> bool {
+        if let Some(pos) = self.constraints.iter().position(|&c| c == constraint) {
+            self.constraints.remove(pos);
+            true
+        } else {
+            false
+        }
+    }
+    fn is_fully_constrained(&self) -> bool { false } // Faces are typically not directly constrained
+    fn degrees_of_freedom(&self) -> i32 { 0 }
+}
+
 impl Validatable for Face {
     fn is_topologically_valid(&self) -> bool {
         // Face validation would check loop connectivity, orientation, etc.
@@ -806,6 +887,627 @@ impl Validatable for Face {
     
     fn validation_errors(&self) -> Vec<ValidationError> {
         Vec::new() // Simplified
+    }
+}
+
+// =====================================================
+// File: src/topology/wire.rs
+// =====================================================
+
+use bevy::prelude::*;
+use serde::{Serialize, Deserialize};
+use crate::topology::traits::*;
+
+/// Topological wire - connected set of edges forming a path (may be open or closed)
+#[derive(Debug, Clone, Component, Serialize, Deserialize)]
+pub struct Wire {
+    pub id: String,
+    /// Ordered edges that form the wire
+    pub edges: Vec<Entity>,
+    /// Whether wire forms a closed loop
+    pub is_closed: bool,
+    /// Wire type classification
+    pub wire_type: WireType,
+    /// Parent shell or solid (if any)
+    pub parent: Option<Entity>,
+    /// Applied constraints
+    pub constraints: Vec<Entity>,
+    /// Wire properties
+    pub properties: WireProperties,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum WireType {
+    /// Profile wire for extrusion/revolution
+    Profile,
+    /// Guide wire for loft/sweep operations
+    Guide,
+    /// Construction wire for reference
+    Construction,
+    /// Intersection wire from boolean operations
+    Intersection,
+    /// Boundary wire of a face
+    Boundary,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WireProperties {
+    /// Visual properties
+    pub visible: bool,
+    pub color: [f32; 4],
+    pub line_width: f32,
+    /// Wire behavior
+    pub construction: bool,
+    pub layer: String,
+}
+
+impl Default for WireProperties {
+    fn default() -> Self {
+        Self {
+            visible: true,
+            color: [1.0, 1.0, 0.0, 1.0], // Yellow for wires
+            line_width: 1.0,
+            construction: false,
+            layer: "Default".to_string(),
+        }
+    }
+}
+
+impl TopologyEntity for Wire {
+    fn id(&self) -> String { self.id.clone() }
+    fn entity_type(&self) -> &'static str { "Wire" }
+    fn is_valid(&self) -> bool { 
+        !self.edges.is_empty() && self.edges_are_connected()
+    }
+    fn children(&self) -> Vec<Entity> { self.edges.clone() }
+    fn parents(&self) -> Vec<Entity> { 
+        if let Some(parent) = self.parent { vec![parent] } else { Vec::new() }
+    }
+}
+
+impl Constrainable for Wire {
+    fn constraints(&self) -> Vec<Entity> { self.constraints.clone() }
+    fn add_constraint(&mut self, constraint: Entity) { self.constraints.push(constraint); }
+    fn remove_constraint(&mut self, constraint: Entity) -> bool {
+        if let Some(pos) = self.constraints.iter().position(|&c| c == constraint) {
+            self.constraints.remove(pos);
+            true
+        } else {
+            false
+        }
+    }
+    fn is_fully_constrained(&self) -> bool { 
+        // Wire constraints depend on intended use
+        !self.constraints.is_empty()
+    }
+    fn degrees_of_freedom(&self) -> i32 {
+        // Simplified - actual DOF depends on constraint types
+        if self.is_fully_constrained() { 0 } else { 6 } // 3 translation + 3 rotation
+    }
+}
+
+impl Validatable for Wire {
+    fn is_topologically_valid(&self) -> bool {
+        !self.edges.is_empty() && self.edges_are_connected()
+    }
+    
+    fn validation_errors(&self) -> Vec<ValidationError> {
+        let mut errors = Vec::new();
+        if self.edges.is_empty() {
+            errors.push(ValidationError::DisconnectedEdges);
+        }
+        if !self.edges_are_connected() {
+            errors.push(ValidationError::DisconnectedEdges);
+        }
+        errors
+    }
+}
+
+impl Wire {
+    pub fn new(id: String, wire_type: WireType) -> Self {
+        Self {
+            id,
+            edges: Vec::new(),
+            is_closed: false,
+            wire_type,
+            parent: None,
+            constraints: Vec::new(),
+            properties: WireProperties::default(),
+        }
+    }
+    
+    /// Add edge to wire
+    pub fn add_edge(&mut self, edge: Entity) {
+        self.edges.push(edge);
+        self.update_closure_status();
+    }
+    
+    /// Remove edge from wire
+    pub fn remove_edge(&mut self, edge: Entity) -> bool {
+        if let Some(pos) = self.edges.iter().position(|&e| e == edge) {
+            self.edges.remove(pos);
+            self.update_closure_status();
+            true
+        } else {
+            false
+        }
+    }
+    
+    /// Check if edges form a connected path
+    fn edges_are_connected(&self) -> bool {
+        // TODO: Implement actual connectivity check
+        // Would need to access edge vertex data through ECS
+        true
+    }
+    
+    /// Update closure status based on edge connectivity
+    fn update_closure_status(&mut self) {
+        // TODO: Check if first edge start vertex == last edge end vertex
+        self.is_closed = false;
+    }
+    
+    /// Get total length of wire
+    pub fn total_length(&self) -> f64 {
+        // TODO: Sum arc lengths of all edges
+        0.0
+    }
+    
+    /// Check if wire is suitable for face creation
+    pub fn can_form_face(&self) -> bool {
+        self.is_closed && self.is_topologically_valid()
+    }
+}
+
+// =====================================================
+// File: src/topology/shell.rs
+// =====================================================
+
+use bevy::prelude::*;
+use serde::{Serialize, Deserialize};
+use crate::topology::traits::*;
+
+/// Topological shell - connected set of faces forming a boundary
+#[derive(Debug, Clone, Component, Serialize, Deserialize)]
+pub struct Shell {
+    pub id: String,
+    /// Faces that form the shell
+    pub faces: Vec<Entity>,
+    /// Whether shell is closed (forms a complete boundary)
+    pub is_closed: bool,
+    /// Shell type classification
+    pub shell_type: ShellType,
+    /// Parent solid (if any)
+    pub solid: Option<Entity>,
+    /// Applied constraints
+    pub constraints: Vec<Entity>,
+    /// Shell properties
+    pub properties: ShellProperties,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum ShellType {
+    /// Outer shell - defines external boundary of solid
+    Outer,
+    /// Inner shell - defines internal void/cavity
+    Inner,
+    /// Open shell - partial boundary (sheet metal, etc.)
+    Open,
+    /// Construction shell - for reference/tooling
+    Construction,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShellProperties {
+    /// Material properties
+    pub material_id: Option<String>,
+    /// Visual properties
+    pub visible: bool,
+    pub color: [f32; 4],
+    pub transparency: f32,
+    /// Shell behavior
+    pub construction: bool,
+    pub layer: String,
+}
+
+impl Default for ShellProperties {
+    fn default() -> Self {
+        Self {
+            material_id: None,
+            visible: true,
+            color: [0.7, 0.7, 0.9, 1.0], // Light blue for shells
+            transparency: 0.0,
+            construction: false,
+            layer: "Default".to_string(),
+        }
+    }
+}
+
+impl TopologyEntity for Shell {
+    fn id(&self) -> String { self.id.clone() }
+    fn entity_type(&self) -> &'static str { "Shell" }
+    fn is_valid(&self) -> bool { 
+        !self.faces.is_empty() && self.faces_are_connected()
+    }
+    fn children(&self) -> Vec<Entity> { self.faces.clone() }
+    fn parents(&self) -> Vec<Entity> { 
+        if let Some(solid) = self.solid { vec![solid] } else { Vec::new() }
+    }
+}
+
+impl Constrainable for Shell {
+    fn constraints(&self) -> Vec<Entity> { self.constraints.clone() }
+    fn add_constraint(&mut self, constraint: Entity) { self.constraints.push(constraint); }
+    fn remove_constraint(&mut self, constraint: Entity) -> bool {
+        if let Some(pos) = self.constraints.iter().position(|&c| c == constraint) {
+            self.constraints.remove(pos);
+            true
+        } else {
+            false
+        }
+    }
+    fn is_fully_constrained(&self) -> bool { 
+        // Shells are typically not directly constrained
+        false
+    }
+    fn degrees_of_freedom(&self) -> i32 { 0 }
+}
+
+impl Validatable for Shell {
+    fn is_topologically_valid(&self) -> bool {
+        !self.faces.is_empty() && 
+        self.faces_are_connected() &&
+        self.has_consistent_orientation()
+    }
+    
+    fn validation_errors(&self) -> Vec<ValidationError> {
+        let mut errors = Vec::new();
+        if self.faces.is_empty() {
+            errors.push(ValidationError::MissingGeometry);
+        }
+        if !self.faces_are_connected() {
+            errors.push(ValidationError::DisconnectedEdges);
+        }
+        if !self.has_consistent_orientation() {
+            errors.push(ValidationError::InvalidOrientation);
+        }
+        errors
+    }
+}
+
+impl Shell {
+    pub fn new(id: String, shell_type: ShellType) -> Self {
+        Self {
+            id,
+            faces: Vec::new(),
+            is_closed: false,
+            shell_type,
+            solid: None,
+            constraints: Vec::new(),
+            properties: ShellProperties::default(),
+        }
+    }
+    
+    /// Add face to shell
+    pub fn add_face(&mut self, face: Entity) {
+        self.faces.push(face);
+        self.update_closure_status();
+    }
+    
+    /// Remove face from shell
+    pub fn remove_face(&mut self, face: Entity) -> bool {
+        if let Some(pos) = self.faces.iter().position(|&f| f == face) {
+            self.faces.remove(pos);
+            self.update_closure_status();
+            true
+        } else {
+            false
+        }
+    }
+    
+    /// Check if faces form a connected shell
+    fn faces_are_connected(&self) -> bool {
+        // TODO: Implement actual connectivity check
+        // Would check that faces share edges properly
+        true
+    }
+    
+    /// Check if face normals are consistently oriented
+    fn has_consistent_orientation(&self) -> bool {
+        // TODO: Implement orientation check
+        // Would verify all face normals point outward (or all inward)
+        true
+    }
+    
+    /// Update closure status based on face connectivity
+    fn update_closure_status(&mut self) {
+        // TODO: Check if shell forms a closed manifold
+        self.is_closed = false;
+    }
+    
+    /// Calculate surface area of shell
+    pub fn surface_area(&self) -> f64 {
+        // TODO: Sum areas of all faces
+        0.0
+    }
+    
+    /// Check if shell can form a solid
+    pub fn can_form_solid(&self) -> bool {
+        self.is_closed && 
+        self.is_topologically_valid() && 
+        self.shell_type == ShellType::Outer
+    }
+    
+    /// Get all edges in the shell
+    pub fn get_all_edges(&self) -> Vec<Entity> {
+        // TODO: Collect unique edges from all faces
+        Vec::new()
+    }
+    
+    /// Get all vertices in the shell
+    pub fn get_all_vertices(&self) -> Vec<Entity> {
+        // TODO: Collect unique vertices from all edges
+        Vec::new()
+    }
+}
+
+// =====================================================
+// File: src/topology/solid.rs
+// =====================================================
+
+use bevy::prelude::*;
+use serde::{Serialize, Deserialize};
+use crate::topology::traits::*;
+
+/// Topological solid - 3D volume bounded by shells
+#[derive(Debug, Clone, Component, Serialize, Deserialize)]
+pub struct Solid {
+    pub id: String,
+    /// Outer shell - defines external boundary
+    pub outer_shell: Entity,
+    /// Inner shells - define internal voids/cavities
+    pub inner_shells: Vec<Entity>,
+    /// Applied constraints (for assemblies)
+    pub constraints: Vec<Entity>,
+    /// Solid properties
+    pub properties: SolidProperties,
+    /// Manufacturing/analysis data
+    pub metadata: SolidMetadata,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SolidProperties {
+    /// Material properties
+    pub material_id: Option<String>,
+    pub density: Option<f64>,
+    /// Visual properties  
+    pub visible: bool,
+    pub color: [f32; 4],
+    pub transparency: f32,
+    /// Solid behavior
+    pub construction: bool,
+    pub layer: String,
+    /// Part information
+    pub part_name: Option<String>,
+    pub part_number: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SolidMetadata {
+    /// Mass properties (computed on demand)
+    pub volume: Option<f64>,
+    pub surface_area: Option<f64>,
+    pub centroid: Option<nalgebra::Point3<f64>>,
+    pub mass: Option<f64>,
+    /// Bounding box
+    pub bounding_box: Option<(nalgebra::Point3<f64>, nalgebra::Point3<f64>)>,
+    /// Manufacturing data
+    pub manufacturing_notes: Vec<String>,
+    /// Revision information
+    pub version: String,
+    pub created_date: Option<String>,
+    pub modified_date: Option<String>,
+}
+
+impl Default for SolidProperties {
+    fn default() -> Self {
+        Self {
+            material_id: None,
+            density: None,
+            visible: true,
+            color: [0.6, 0.8, 0.6, 1.0], // Light green for solids
+            transparency: 0.0,
+            construction: false,
+            layer: "Default".to_string(),
+            part_name: None,
+            part_number: None,
+        }
+    }
+}
+
+impl Default for SolidMetadata {
+    fn default() -> Self {
+        Self {
+            volume: None,
+            surface_area: None,
+            centroid: None,
+            mass: None,
+            bounding_box: None,
+            manufacturing_notes: Vec::new(),
+            version: "1.0".to_string(),
+            created_date: None,
+            modified_date: None,
+        }
+    }
+}
+
+impl TopologyEntity for Solid {
+    fn id(&self) -> String { self.id.clone() }
+    fn entity_type(&self) -> &'static str { "Solid" }
+    fn is_valid(&self) -> bool { 
+        // Solid needs at least an outer shell
+        true // Would check shell validity
+    }
+    fn children(&self) -> Vec<Entity> { 
+        let mut shells = vec![self.outer_shell];
+        shells.extend(self.inner_shells.clone());
+        shells
+    }
+    fn parents(&self) -> Vec<Entity> { Vec::new() } // Solids are top-level
+}
+
+impl Constrainable for Solid {
+    fn constraints(&self) -> Vec<Entity> { self.constraints.clone() }
+    fn add_constraint(&mut self, constraint: Entity) { self.constraints.push(constraint); }
+    fn remove_constraint(&mut self, constraint: Entity) -> bool {
+        if let Some(pos) = self.constraints.iter().position(|&c| c == constraint) {
+            self.constraints.remove(pos);
+            true
+        } else {
+            false
+        }
+    }
+    fn is_fully_constrained(&self) -> bool { 
+        // In assembly context - check if position/orientation is fixed
+        self.constraints.len() >= 6 // 3 translation + 3 rotation constraints
+    }
+    fn degrees_of_freedom(&self) -> i32 {
+        6 - self.constraints.len() as i32 // 6 DOF in 3D space
+    }
+}
+
+impl Validatable for Solid {
+    fn is_topologically_valid(&self) -> bool {
+        // TODO: Check that outer shell is closed and properly oriented
+        // TODO: Check that inner shells don't intersect outer or each other
+        true
+    }
+    
+    fn validation_errors(&self) -> Vec<ValidationError> {
+        let mut errors = Vec::new();
+        // TODO: Implement solid validation
+        // - Outer shell must be closed
+        // - Inner shells must be inside outer shell
+        // - No self-intersections
+        errors
+    }
+}
+
+impl Solid {
+    pub fn new(id: String, outer_shell: Entity) -> Self {
+        Self {
+            id,
+            outer_shell,
+            inner_shells: Vec::new(),
+            constraints: Vec::new(),
+            properties: SolidProperties::default(),
+            metadata: SolidMetadata::default(),
+        }
+    }
+    
+    /// Add internal cavity/void
+    pub fn add_inner_shell(&mut self, inner_shell: Entity) {
+        self.inner_shells.push(inner_shell);
+        self.invalidate_cached_properties();
+    }
+    
+    /// Remove internal cavity
+    pub fn remove_inner_shell(&mut self, inner_shell: Entity) -> bool {
+        if let Some(pos) = self.inner_shells.iter().position(|&s| s == inner_shell) {
+            self.inner_shells.remove(pos);
+            self.invalidate_cached_properties();
+            true
+        } else {
+            false
+        }
+    }
+    
+    /// Calculate volume (cached)
+    pub fn volume(&mut self) -> f64 {
+        if let Some(volume) = self.metadata.volume {
+            volume
+        } else {
+            let calculated_volume = self.calculate_volume();
+            self.metadata.volume = Some(calculated_volume);
+            calculated_volume
+        }
+    }
+    
+    /// Calculate surface area (cached)
+    pub fn surface_area(&mut self) -> f64 {
+        if let Some(area) = self.metadata.surface_area {
+            area
+        } else {
+            let calculated_area = self.calculate_surface_area();
+            self.metadata.surface_area = Some(calculated_area);
+            calculated_area
+        }
+    }
+    
+    /// Calculate mass based on volume and density
+    pub fn mass(&mut self) -> Option<f64> {
+        if let Some(density) = self.properties.density {
+            Some(self.volume() * density)
+        } else {
+            None
+        }
+    }
+    
+    /// Get all faces in the solid
+    pub fn get_all_faces(&self) -> Vec<Entity> {
+        // TODO: Collect faces from all shells
+        Vec::new()
+    }
+    
+    /// Get all edges in the solid
+    pub fn get_all_edges(&self) -> Vec<Entity> {
+        // TODO: Collect unique edges from all faces
+        Vec::new()
+    }
+    
+    /// Get all vertices in the solid
+    pub fn get_all_vertices(&self) -> Vec<Entity> {
+        // TODO: Collect unique vertices from all edges
+        Vec::new()
+    }
+    
+    /// Check if point is inside solid
+    pub fn contains_point(&self, point: nalgebra::Point3<f64>) -> bool {
+        // TODO: Implement point-in-solid test
+        // Would use ray casting or winding number algorithm
+        false
+    }
+    
+    /// Invalidate cached geometric properties
+    fn invalidate_cached_properties(&mut self) {
+        self.metadata.volume = None;
+        self.metadata.surface_area = None;
+        self.metadata.centroid = None;
+        self.metadata.mass = None;
+        self.metadata.bounding_box = None;
+    }
+    
+    /// Calculate volume using divergence theorem
+    fn calculate_volume(&self) -> f64 {
+        // TODO: Implement volume calculation
+        // Would integrate over all face triangulations
+        0.0
+    }
+    
+    /// Calculate surface area
+    fn calculate_surface_area(&self) -> f64 {
+        // TODO: Sum areas of all faces in all shells
+        0.0
+    }
+    
+    /// Update modification timestamp
+    pub fn mark_modified(&mut self) {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        self.metadata.modified_date = Some(timestamp.to_string());
+        self.invalidate_cached_properties();
     }
 }
 
